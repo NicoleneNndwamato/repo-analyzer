@@ -3,3 +3,4 @@ repos/
 uploads/
 *.zip
 .env
+public/index.html.backup
