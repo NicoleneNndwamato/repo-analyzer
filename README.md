@@ -21,3 +21,7 @@ Requirements: Node.js 18+, Git, and npm.
 npm install
 mkdir -p repos uploads
 node server.js
+
+## AI Declaration
+
+AI assistance was used during development for implementation guidance, debugging, testing, and documentation. All generated suggestions were reviewed and adapted before submission.
