@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RAT — Repo Analysis Tool</title>
+<style>
+  :root {
+    --bg: #f4f8ff;
+    --card: #949292;
+    --card-border: #070707;
+    --primary: #920606;
+    --primary-hover: #d11010;
+    --gold: #030303;
+    --gold-dim: #d89d09;
+    --text: #181716;
+    --text-muted:#302a26;
+    --danger: #d426f7;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+  .container { max-width: 1200px; margin: 0 auto; padding: 32px 24px; }
+  header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 8px; }
+  h1 { font-size: 28px; font-weight: 700; color: var(--gold); letter-spacing: -0.5px; }
+  .subtitle { color: var(--text-muted); font-size: 14px; }
+  .divider { height: 2px; background: linear-gradient(90deg, var(--primary), var(--gold), transparent); margin: 16px 0 24px; }
+  .card { background: var(--card); border: 1px solid var(--card-border); border-radius: 10px; padding: 20px; margin-bottom: 20px; }
+  .card h2 { font-size: 15px; font-weight: 600; color: var(--gold); margin-bottom: 14px; text-transform: uppercase; letter-spacing: 0.5px; }
+  label { display: block; font-size: 11px; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase; }
+  input, select { background: var(--bg); color: var(--text); border: 1px solid var(--card-border); border-radius: 6px; padding: 9px 12px; font-size: 14px; width: 100%; }
+  input:focus, select:focus { outline: none; border-color: var(--gold-dim); box-shadow: 0 0 0 2px rgba(201,168,76,0.15); }
+  input::placeholder { color: var(--text-muted); }
+  button { background: var(--primary); color: var(--text); border: none; border-radius: 6px; padding: 9px 16px; font-size: 14px; font-weight: 500; cursor: pointer; white-space: nowrap; }
+  button:hover { background: var(--primary-hover); }
+  button.secondary { background: transparent; border: 1px solid var(--card-border); color: var(--text-muted); }
+  button.secondary:hover { border-color: var(--gold-dim); color: var(--text); }
+  button.danger { background: var(--danger); }
+  button.danger:hover { background: #A02030; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+  .field { display: flex; flex-direction: column; min-width: 140px; }
+  .error { color: #F0C0C0; background: rgba(107,15,26,0.3); border: 1px solid var(--primary); padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; display: none; font-size: 14px; }
+  .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; }
+  .metric { background: var(--bg); border: 1px solid var(--card-border); border-radius: 8px; padding: 16px; position: relative; overflow: hidden; }
+  .metric::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, var(--primary), var(--gold)); }
+  .metric .value { font-size: 24px; font-weight: 700; color: var(--gold); }
+  .metric .label { font-size: 12px; color: var(--text-muted); margin-top: 6px; text-transform: uppercase; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { text-align: left; padding: 10px 12px; color: var(--text-muted); font-weight: 500; font-size: 11px; text-transform: uppercase; border-bottom: 2px solid var(--card-border); }
+  td { padding: 10px 12px; border-bottom: 1px solid rgba(61,10,30,0.5); }
+  tr:hover td { background: rgba(107,15,26,0.1); }
+  .ownership-cell { display: flex; align-items: center; gap: 10px; }
+  .bar-track { flex: 1; height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden; }
+  .bar { height: 100%; background: linear-gradient(90deg, var(--primary), var(--gold)); border-radius: 3px; min-width: 2px; }
+  .ownership-pct { color: var(--gold); font-weight: 500; min-width: 50px; text-align: right; }
+  #status { font-size: 13px; color: var(--gold-dim); margin-left: 8px; align-self: center; }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>RAT</h1>
+    <span class="subtitle">Repo Analysis Tool</span>
+  </header>
+  <div class="divider"></div>
+  <div id="error" class="error"></div>
+
+  <div class="card">
+    <h2>Repository</h2>
+    <div class="row">
+      <div class="field" style="flex:1; min-width:200px">
+        <label>Repository</label>
+        <select id="repoSelect"><option value="">Loading...</option></select>
+      </div>
+      <button class="secondary" onclick="loadRepos()">Refresh</button>
+    </div>
+    <div class="row" style="margin-top:14px">
+      <div class="field" style="flex:1; min-width:200px">
+        <label>Clone URL</label>
+        <input id="cloneUrl" placeholder="https://github.com/user/repo.git">
+      </div>
+      <button onclick="addRepoByUrl()">Clone</button>
+      <div class="field" style="flex:1; min-width:200px">
+        <label>Zip upload (must contain .git)</label>
+        <input type="file" id="zipFile" accept=".zip">
+      </div>
+      <button onclick="uploadZip()">Upload</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Filters</h2>
+    <div class="row">
+      <div class="field" style="flex:1; min-width:180px">
+        <label>Author</label>
+        <select id="authorFilter"><option value="">All authors</option></select>
+      </div>
+      <div class="field">
+        <label>Scope</label>
+        <select id="scopeType">
+          <option value="">Repository</option>
+          <option value="file">File</option>
+          <option value="dir">Directory</option>
+        </select>
+      </div>
+      <div class="field" style="flex:1; min-width:180px">
+        <label>Path</label>
+        <input id="pathInput" placeholder="e.g. cJSON.c or tests">
+      </div>
+      <div class="field">
+        <label>From</label>
+        <input type="date" id="fromDate">
+      </div>
+      <div class="field">
+        <label>To</label>
+        <input type="date" id="toDate">
+      </div>
+      <div class="field" style="flex:1; min-width:250px">
+        <label>Specific commits</label>
+        <select id="commitFilter" multiple size="6"></select>
+      </div>
+      <button type="button" onclick="loadCommits()">Load commits</button>
+      <button onclick="loadMetrics()">Apply</button>
+      <button class="secondary" onclick="clearFilters()">Clear</button>
+      <span id="status"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Metrics <span id="scopeTitle"></span></h2>
+    <div class="metrics-grid" id="metricsGrid"></div>
+  </div>
+
+  <div class="card">
+    <h2>Author Ownership</h2>
+    <table>
+      <thead><tr><th>Author</th><th>Modifications</th><th>Churn</th><th>Ownership</th></tr></thead>
+      <tbody id="authorTableBody"></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Merge Authors</h2>
+    <div class="row" style="margin-bottom:14px">
+      <div class="field" style="flex:1; min-width:200px">
+        <label>Merge from</label>
+        <select id="mergeFrom"></select>
+      </div>
+      <div class="field" style="flex:1; min-width:200px">
+        <label>Into</label>
+        <select id="mergeTo"></select>
+      </div>
+      <button class="danger" onclick="mergeAuthors()">Merge</button>
+    </div>
+    <table>
+      <thead><tr><th>Name</th><th>Email</th><th>Commits</th></tr></thead>
+      <tbody id="authorStatsBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+let currentRepo = '';
+
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+async function api(path, opts) {
+  const res = await fetch(path, opts);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+function showError(msg) {
+  const el = document.getElementById('error');
+  el.textContent = msg;
+  el.style.display = msg ? 'block' : 'none';
+}
+
+async function loadRepos() {
+  try {
+    const repos = await api('/api/repos');
+    const sel = document.getElementById('repoSelect');
+    sel.innerHTML = repos.map(r => `<option value="${esc(r)}">${esc(r)}</option>`).join('');
+    if (repos.length && !currentRepo) currentRepo = repos[0];
+    if (currentRepo) sel.value = currentRepo;
+    if (currentRepo) {
+      await loadAuthors();
+      await loadCommits();
+      await loadMetrics();
+    }
+  } catch (e) { showError(e.message); }
+}
+
+document.getElementById('repoSelect').addEventListener('change', async (e) => {
+  currentRepo = e.target.value;
+  await loadAuthors();
+  await loadCommits();
+  await loadMetrics();
+});
+
+async function loadAuthors() {
+  if (!currentRepo) return;
+
+  try {
+    const stats = await api(
+      `/api/repos/${encodeURIComponent(currentRepo)}/authors/stats`
+    );
+
+    const authorFilter = document.getElementById('authorFilter');
+    const mergeFrom = document.getElementById('mergeFrom');
+    const mergeTo = document.getElementById('mergeTo');
+    const statsBody = document.getElementById('authorStatsBody');
+
+    authorFilter.innerHTML = '';
+    mergeFrom.innerHTML = '';
+    mergeTo.innerHTML = '';
+    statsBody.innerHTML = '';
+
+    const allAuthorsOption = document.createElement('option');
+    allAuthorsOption.value = '';
+    allAuthorsOption.textContent = 'All authors';
+    authorFilter.appendChild(allAuthorsOption);
+
+    for (const author of stats) {
+      // Filter using email, avoiding Name <email> formatting problems.
+      const filterOption = document.createElement('option');
+      filterOption.value = author.email;
+      filterOption.textContent = `${author.name} (${author.commits})`;
+      authorFilter.appendChild(filterOption);
+
+      // Author merging requires the complete identity.
+      const identity = `${author.name} <${author.email}>`;
+
+      const fromOption = document.createElement('option');
+      fromOption.value = identity;
+      fromOption.textContent = `${identity} (${author.commits})`;
+      mergeFrom.appendChild(fromOption);
+
+      const toOption = document.createElement('option');
+      toOption.value = identity;
+      toOption.textContent = `${identity} (${author.commits})`;
+      mergeTo.appendChild(toOption);
+
+      const row = document.createElement('tr');
+
+      const nameCell = document.createElement('td');
+      nameCell.textContent = author.name;
+
+      const emailCell = document.createElement('td');
+      emailCell.textContent = author.email;
+
+      const commitsCell = document.createElement('td');
+      commitsCell.textContent = author.commits;
+
+      row.append(nameCell, emailCell, commitsCell);
+      statsBody.appendChild(row);
+    }
+  } catch (error) {
+    showError(error.message);
+  }
+}
+
+
+async function loadCommits() {
+  if (!currentRepo) return;
+
+  try {
+    const commits = await api(
+      `/api/repos/${encodeURIComponent(currentRepo)}/commits?limit=1000`
+    );
+
+    const select = document.getElementById('commitFilter');
+    select.innerHTML = '';
+
+    for (const commit of commits) {
+      const option = document.createElement('option');
+      option.value = commit.hash;
+      option.textContent =
+        `${commit.hash.slice(0, 8)} — ${commit.date} — ${commit.author}`;
+      select.appendChild(option);
+    }
+  } catch (error) {
+    showError(error.message);
+  }
+}
+
+function buildQuery() {
+  const params = new URLSearchParams();
+  const author = document.getElementById('authorFilter').value;
+  const scope = document.getElementById('scopeType').value;
+  const pathVal = document.getElementById('pathInput').value.trim();
+  const from = document.getElementById('fromDate').value;
+  const to = document.getElementById('toDate').value;
+  if (author) params.set('author', author);
+  if (scope && pathVal) params.set(scope, pathVal);
+  if (from) params.set('from', Math.floor(new Date(from).getTime() / 1000));
+  if (to) params.set('to', Math.floor(new Date(to).getTime() / 1000) + 86400);
+  const commitFilter = document.getElementById('commitFilter');
+  const selectedCommits = commitFilter
+    ? Array.from(commitFilter.selectedOptions).map(option => option.value)
+    : [];
+
+  if (selectedCommits.length > 0) {
+    params.set('commits', selectedCommits.join(','));
+  }
+
+  return params.toString();
+}
+
+async function loadMetrics() {
+  if (!currentRepo) return;
+  try {
+    showError('');
+    const qs = buildQuery();
+    const m = await api(`/api/repos/${currentRepo}/metrics${qs ? '?' + qs : ''}`);
+    document.getElementById('status').textContent = `${m.commitCount} commits`;
+    const obj = m.file || m.directory || m.repository || {};
+    const label = m.file ? 'file' : m.directory ? 'directory' : 'repository';
+    const pathVal = document.getElementById('pathInput').value.trim() || 'root';
+    document.getElementById('scopeTitle').textContent = `— ${label}: ${pathVal}`;
+    const cells = [
+      ['Added lines', obj.added], ['Removed lines', obj.removed],
+      ['Growth', obj.growth], ['Churn', obj.churn],
+      ['Modifications', obj.modifications],
+      ['Mod. frequency', (obj.modFrequency || 0).toFixed(4)],
+      ['Churn rate', (obj.churnRate || 0).toFixed(2)]
+    ];
+    document.getElementById('metricsGrid').innerHTML = cells.map(([l, v]) =>
+      `<div class="metric"><div class="value">${v}</div><div class="label">${l}</div></div>`).join('');
+
+    const authors = m.fileAuthors || m.directoryAuthors || m.repositoryAuthors || {};
+    const rows = Object.values(authors).filter(r => r.modifications > 0).sort((a, b) => b.churn - a.churn);
+    const maxOwn = Math.max(...rows.map(r => r.ownership), 0.0001);
+    document.getElementById('authorTableBody').innerHTML = rows.map(r =>
+      `<tr><td>${esc(r.author.name)} <span style="color:var(--text-muted)">&lt;${esc(r.author.email)}&gt;</span></td>
+       <td>${r.modifications}</td><td style="color:var(--gold)">${r.churn}</td>
+       <td><div class="ownership-cell">
+         <div class="bar-track"><div class="bar" style="width:${(r.ownership / maxOwn * 100).toFixed(1)}%"></div></div>
+         <span class="ownership-pct">${(r.ownership * 100).toFixed(2)}%</span></div></td></tr>`).join('');
+  } catch (e) { showError(e.message); }
+}
+
+function clearFilters() {
+  ['authorFilter','pathInput','fromDate','toDate'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('scopeType').value = '';
+  document.getElementById('commitFilter').selectedIndex = -1;
+  loadMetrics();
+}
+
+async function addRepoByUrl() {
+  const url = document.getElementById('cloneUrl').value.trim();
+  if (!url) return showError('Enter a clone URL');
+  try { showError('');
+    const r = await api('/api/repos', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url })
+    });
+    currentRepo = r.repo;
+    await loadRepos();
+  } catch (e) { showError(e.message); }
+}
+
+async function uploadZip() {
+  const input = document.getElementById('zipFile');
+  if (!input.files.length) return showError('Choose a zip file');
+  try { showError('');
+    const fd = new FormData();
+    fd.append('file', input.files[0]);
+    const r = await api('/api/repos/upload', { method: 'POST', body: fd });
+    currentRepo = r.repo;
+    await loadRepos();
+  } catch (e) { showError(e.message); }
+}
+
+async function mergeAuthors() {
+  const from = document.getElementById('mergeFrom').value;
+  const to = document.getElementById('mergeTo').value;
+  if (!from || !to) return showError('Select authors to merge');
+  if (from === to) return showError('Cannot merge an author into itself');
+  try { showError('');
+    await api(`/api/repos/${currentRepo}/merge-authors`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from, to })
+    });
+    await loadAuthors();
+    await loadMetrics();
+  } catch (e) { showError(e.message); }
+}
+
+loadRepos();
+</script>
+</body>
+</html>
